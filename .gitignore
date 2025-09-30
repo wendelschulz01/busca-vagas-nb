@@ -1,0 +1,68 @@
+# --- Gerais ---
+.DS_Store
+Thumbs.db
+*.log
+logs/
+*.tmp
+*.swp
+*.swo
+*.bak
+.env
+
+# --- Node/Frontend ---
+node_modules/
+npm-debug.log*
+yarn.lock
+pnpm-lock.yaml
+
+
+# Vite / builds
+frontend/dist/
+frontend/.vite/
+frontend/.cache/
+
+# --- API (Node) ---
+api/node_modules/
+api/.env
+api/.env.*
+api/.cache/
+api/coverage/
+
+# --- ML (Python) ---
+ml/.env
+ml/.env.*
+ml/__pycache__/
+ml/.pytest_cache/
+ml/.mypy_cache/
+ml/.ruff_cache/
+ml/.ipynb_checkpoints/
+ml/*.egg-info/
+ml/venv/
+ml/.venv/
+ml/.cache/
+ml/models/*.joblib
+ml/models/*.pkl
+
+# --- Banco de dados / dados ---
+db/*.sql~           # backups temporários
+*.sqlite
+*.sqlite3
+data/
+datasets/
+cache/
+tmp/
+
+# --- Docker ---
+docker-compose.override.yml
+*.tar
+*.img
+
+# --- IDEs/OS ---
+.vscode/
+.idea/
+*.iml
+*.code-workspace
+
+# --- Coverage / Reports ---
+coverage/
+reports/
