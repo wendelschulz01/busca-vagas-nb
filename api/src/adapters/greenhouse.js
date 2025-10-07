@@ -37,7 +37,7 @@ function extractDescription(job) {
   return "";
 };
 
-unction normalize(company, job) {
+function normalize(company, job) {
   const title = job.text || job.title || "";
   const location_raw = job?.categories?.location || job?.country || "";
   const description = extractDescription(job);
