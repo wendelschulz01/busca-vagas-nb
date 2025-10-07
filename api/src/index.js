@@ -31,7 +31,27 @@ app.get("/health", async (req, res) => {
     }
 });
 
-//Busca (MVP): interpreta a intenção + retorna vagas recentes do DB
+app.post("/ingest:source", async (req, res) =>{
+    const source = req.params.source;
+    const { company } = req.query;
+    const timeoutMs = Number(process.env.ADAPTER_TIMEOUT_MS || 8000);
+
+    console.time(`ingest:${source}:${company || "na"}`);
+    try{ 
+        const items = await fetchJobsFromSource({ source, company, timeoutMs });
+
+        const unique = Array.from(new Map(items.map(j => [j.id, j])).values());
+
+        const result = await upsertJobs(unique);
+
+        console.timeEnd(`ingest:${source}:${company || "na"}`);
+        res.json({ source, company, count_in: items.length, ...result });
+    }catch (e){
+        console.timeEnd(`ingest:${source}:${company || "na"}`);
+        res.status(400).json({ error: e.message });
+    }
+});
+
 app.post("/search", async (req, res) => {
     const q = req.body?.q ?? "";
     let intent = {};
@@ -51,7 +71,7 @@ app.post("/search", async (req, res) => {
             FROM jobs ORDER BY published_at DESC LIMIT 20`
         );
 
-        //TODO: aplicar ranking de verdade (cosine + match de facetas)
+        //aplicar ranking de verdade (cosine + match de facetas)
         const items = rows.map(r => ({
             ...r,
             score: 0.5,
