@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     description TEXT,
     url TEXT,
     source TEXT,
-    published_at TIMESTAMPZ DEFAULT NOW(),
+    published_at TIMESTAMPTZ DEFAULT NOW(),
     facets_nb JSONB    
 );
 

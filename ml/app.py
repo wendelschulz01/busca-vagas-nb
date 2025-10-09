@@ -44,9 +44,17 @@ def taxonomy(job: Job):
     text = f"{job.title} {job.description}".lower()
 
     # --- PLACEHOLDER SIMPLES (trocar por NB) ---
-    modalidade = "remoto" if "remoto" in text or "remote" in text or "anywhere" in text else "presencial"
+   modalidade = "remoto" if any(k in text for k in ["remoto","remote","anywhere"]) else "presencial"
     area = "ti" if any(k in text for k in ["developer","dev","software","dados","data","suporte"]) else "outras"
-    senioridade = "jr" if "junior" in text or "jr" in text else "pl" if "pleno" in text or "pl" in text else "sr" if "senior" in text or "sr" in text else "indefinida"
+
+    if "junior" in text or "jr" in text:
+        senioridade = "jr"
+    elif "pleno" in text or re.search(r"\bpl\b", text or ""):
+        senioridade = "pl"
+    elif "senior" in text or re.search(r"\bsr\b", text or ""):
+        senioridade = "sr"
+    else:
+        senioridade = "indefinida"
 
     return {
         "senioridade": senioridade,

@@ -4,6 +4,9 @@ import dotenv from "dotenv";
 import fetch from "node-fetch";
 import pkg from "pg";
 
+import { fetchJobsFromSource } from "./adapters/index.js";
+import { upsertJobs } from "./services/jobsService.js";
+
 dotenv.config();
 
 const app = express();
@@ -19,7 +22,7 @@ const pool = new Pool({
     database: process.env.POSTGRES_DB || "jobsdb"
 });
 
-const ML_BASE = `HTTP://ML:${process.env.ML_PORT || 8000}`;
+const ML_BASE = `http://ml:${process.env.ML_PORT || 8000}`;
 
 app.get("/health", async (req, res) => {
     try {
@@ -31,14 +34,16 @@ app.get("/health", async (req, res) => {
     }
 });
 
-app.post("/ingest:source", async (req, res) =>{
+app.post("/ingest/:source", async (req, res) =>{
     const source = req.params.source;
-    const { company } = req.query;
+    const { company, limit } = req.query;
     const timeoutMs = Number(process.env.ADAPTER_TIMEOUT_MS || 8000);
 
     console.time(`ingest:${source}:${company || "na"}`);
     try{ 
-        const items = await fetchJobsFromSource({ source, company, timeoutMs });
+        const items = await fetchJobsFromSource({ 
+            source, company, timeoutMs, limit: limit ? Number(limit) : undefined 
+        });
 
         const unique = Array.from(new Map(items.map(j => [j.id, j])).values());
 

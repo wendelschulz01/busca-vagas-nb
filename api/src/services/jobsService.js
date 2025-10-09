@@ -6,17 +6,19 @@ const pool = new Pool ({
     port: Number(process.env.POSTGRES_PORT || 5432),
     user: process.env.POSTGRES_USER || "jobs",
     password: process.env.POSTGRES_PASSWORD || "jobs123",
-    databse: process.env.POSTGRES_DB || 'jobsdb'
+    database: process.env.POSTGRES_DB || 'jobsdb'
 });
 
-function validadeJob(j) {
+function validateJob(j) {
     if (!j.id || !j.title || !j.url) {
         return false;
     } else{return true};
 }
 
 export async function upsertJobs(items) {
-    if (Array.isArray(items) || items.length === 0 ) return { inserted: 0, updated: 0, skipped: 0};
+    if (!Array.isArray(items) || items.length === 0 ) {
+        return { inserted: 0, updated: 0, skipped: 0};
+    };
 
     let inserted = 0, updated = 0, skipped = 0;
 
@@ -47,7 +49,7 @@ export async function upsertJobs(items) {
                 j.facets_nb || null
             ];
             const { rows } = await client.query(text, values);
-            if (rows[0]?.iserted) inserted++; else updated++;
+            if (rows[0]?.inserted) inserted++; else updated++;
         }
         await client.query("COMMIT");
         return { inserted, updated, skipped };
