@@ -22,16 +22,30 @@ const pool = new Pool({
     database: process.env.POSTGRES_DB || "jobsdb"
 });
 
-const ML_BASE = `http://ml:${process.env.ML_PORT || 8000}`;
+const ML_BASE = process.env.ML_BASE_URL || `http://ml:${process.env.ML_PORT || 8000}`;
 
 app.get("/health", async (req, res) => {
-    try {
-        const ml = await fetch(`${ML_BASE}/health`).then(r => r.json());
-        const db = await pool.query("SELECT 1 as ok");
-        res.json({ ok: true, ml, db: db.rows[0] });
-    } catch (e) {
-        res.status(500).json({ ok: false, error: e.message });
-    }
+   const status = { ok: true, db: null, ml: null, errors: {} };
+
+   try{
+    const db = await pool.query("SELECT 1 as ok");
+    status.db = db.rows[0];
+   } catch(e){
+    status.ok = false;
+    status.errors.db = e.message;
+   }
+
+   try{
+    const r = await fetch(`${ML_BASE}/health`, { signal: AbortSignal.timeout(3000) });
+    status.ml = await r.json();
+   } catch(e){
+    status.ok = false;
+    status.errors.ml = e.message;
+   }
+
+   const code = status.ok ? 200 : 503;
+   res.status(code).json(status);
+
 });
 
 app.post("/ingest/:source", async (req, res) =>{
