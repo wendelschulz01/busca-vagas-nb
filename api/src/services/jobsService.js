@@ -42,7 +42,7 @@ export async function upsertJobs(items) {
         `;
 
         for (const j of items) {
-            if(!validadeJob(j)) { skipped++; continue; }
+            if(!validateJob(j)) { skipped++; continue; }
             const values = [
                 j.id, j.title, j.company || null, j.location_raw || null, !!j.remote_flag,
                 j.description || null, j.url, j.source || null, j.published_at || new Date().toISOString(),
