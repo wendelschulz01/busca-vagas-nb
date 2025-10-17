@@ -1,85 +1,54 @@
-import fetch from "node-fetch";
+// api/src/adapters/greenhouse.js
+import { buildId, stripHtml, toBoolRemote, normalizeJob } from "./_common.js";
 
-function withTimeout(ms) {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), ms);
-    return { signal: controller.signal, clear: () => clearTimeout(id) };
-};
+export default async function fetchGreenhouse({ company, limit = 200, timeoutMs = 8000 }) {
+  if (!company) throw new Error("Parâmetro 'company' é obrigatório para Greenhouse");
 
-function dateToISO(x) {
-    if(!x) {
-      return new Date().toISOString();
-    }
-    try{
-      return new Date().toISOString();
-    }catch{
-      return new Date().toISOString();
-    }
-};
+  const url = `https://boards-api.greenhouse.io/v1/boards/${company}/jobs`;
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), timeoutMs);
 
-function extractDescription(job) {
-  if (typeof job.descriptionPlain === "string" && job.descriptionPlain.trim()) {
-    return job.descriptionPlain;
+  const res = await fetch(url, {
+    signal: ctrl.signal,
+    headers: { "accept": "application/json", "user-agent": "BuscaVagas-NB/1.0" }
+  });
+  clearTimeout(to);
+
+  if (!res.ok) {
+    let body = "";
+    try { body = (await res.text()).slice(0, 200); } catch {}
+    throw new Error(`Greenhouse ${company} ${res.status}. Body: ${body}`);
   }
-  if (typeof job.description === "string" && job.description.trim()) {
-    return job.description;
-  }
-  if (Array.isArray(job.lists)) {
-    const chunks = [];
-    for (const sec of job.lists) {
-      if (sec?.text) chunks.push(String(sec.text));
-      if (Array.isArray(sec?.content)) {
-        for (const it of sec.content) if (it?.text) chunks.push(String(it.text));
+
+  const data = await res.json();
+  const raw = Array.isArray(data?.jobs) ? data.jobs : [];
+  const jobs = raw.slice(0, limit);
+
+  return jobs.map((j, idx) => {
+    // Greenhouse manda HTML em `content`, location em `location.name`
+    const title = j.title || "";
+    const loc = j.location?.name || "";
+    const html = j.content || "";
+    const desc = stripHtml(html);
+    const remote = toBoolRemote(`${loc} ${title} ${html}`);
+
+    return normalizeJob({
+      id: buildId("greenhouse", company, j.id ?? idx),
+      title,
+      company,
+      location_raw: loc || null,
+      remote_flag: remote,
+      description: desc,
+      url: j.absolute_url || j.hosted_url || j.internal_job_url || null,
+      source: "greenhouse",
+      published_at: j.updated_at || j.created_at || null,
+      facets_nb: {
+        // alguns boards trazem department/office/teams dentro do objeto
+        department: j.departments?.[0]?.name ?? j.departments ?? null,
+        office: j.offices?.[0]?.name ?? j.offices ?? null,
+        // manter o payload mínimo que possa ser útil
+        gh_id: j.id
       }
-    }
-    const joined = chunks.join("\n").trim();
-    if (joined) return joined;
-  }
-  return "";
-};
-
- function detectRemote(job){
-  const loc = job?.location?.name || "";
-  const title = job?.title || "";
-  const html = job?.content || "";
-  const hay = `${loc}\n${title}\n${html}`;
-  return /remote|remoto|anywhere|work from home|home[- ]?office/i.test(hay);
-  };
-
-function normalize(company, job) {
-  return {
-    id: `greenhouse:${company}:${job.id}`,
-    title: job.title || "",
-    company,
-    location_raw: job.location?.name || "",
-    remote_flag: detectRemote(job),
-    description: job.content || "",
-    url: job.absolute_url,
-    source: "greenhouse",
-    published_at: dateToISO(job.updated_at || job.created_at)
-  }
-}
-
-export async function fetchGreenhouse({ company, timeoutMs = 8000, limit }) {
-    if (!company) {
-        throw new Error("Parâmetro 'company' é obrigatório para Greenhouse");
-    };
-
-    const { signal, clear } = withTimeout(timeoutMs);
-    const url = `https://boards-api.greenhouse.io/v1/boards/${company}/jobs`;
-
-    console.time(`greenhouse:${company}`);
-    try {
-        const res = await fetch(url, { signal, headers: { "User-Agent": "Busca                                                                          'gas-NB/1.0"} });
-        if  (!res.ok) {
-            throw new Error(`HTTP ${res.status} ao buscar ${url}`);
-        };
-        const data = await res.json();
-        const items = Array.isArray(data.jobs) ? data.jobs.map(j => normalize(company, j)) : [];
-        return items;
-    } finally {
-        console.timeEnd(`greenhouse:${company}`);
-        clear();
-    }
-      
+    });
+  });
 }
