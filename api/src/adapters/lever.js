@@ -47,7 +47,7 @@ export default async function fetchLever({ company, limit = 200, timeoutMs = 800
       location_raw: loc || null,
       remote_flag: remote,
       description: desc,
-      url: j.hostedUrl || j.applyUrl || j.urls?.show || j.hostedUrl ?? null,
+      url: j.hostedUrl || j.applyUrl || j.urls?.show || j.hostedUrl || null,
       source: "lever",
       published_at: j.updatedAt || j.createdAt || null, // epoch ms aceito por Date(...)
       facets_nb: {
