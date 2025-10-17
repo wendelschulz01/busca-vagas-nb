@@ -38,6 +38,7 @@ export async function upsertJobs(items) {
             url = EXCLUDED.url,
             source = EXCLUDED.source,
             published_at = EXCLUDED.published_at
+            facets_nb=COALESCE(jobs.facets_nb,'{}'::jsonb) || COALESCE(EXCLUDED.facets_nb,'{}'::jsonb)
           RETURNING (xmax = 0) AS inserted
         `;
 
