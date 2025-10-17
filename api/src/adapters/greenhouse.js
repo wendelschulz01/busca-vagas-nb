@@ -11,9 +11,9 @@ function dateToISO(x) {
       return new Date().toISOString();
     }
     try{
-      return new Date().toDateString();
+      return new Date().toISOString();
     }catch{
-      return new Date().toDateString();
+      return new Date().toISOString();
     }
 };
 
