@@ -15,7 +15,6 @@ function validateJob(j) {
     } else{return true};
 }
 
-e// api/src/services/jobsService.js
 export async function upsertJobs(pool, items = []) {
   if (!Array.isArray(items) || items.length === 0) {
     return { inserted: 0, updated: 0, skipped: 0 };
@@ -49,7 +48,6 @@ export async function upsertJobs(pool, items = []) {
     );
   }
 
-  // Truque: (xmax = 0) é true em linhas recém-inseridas; false quando foi UPDATE
   const sql = `
     INSERT INTO jobs (${COLS.join(",")})
     VALUES ${rows}
