@@ -15,9 +15,13 @@ function validateJob(j) {
     } else{return true};
 }
 
+e// api/src/services/jobsService.js
 export async function upsertJobs(pool, items = []) {
-  if (!items.length) return { inserted: 0, updated: 0, skipped: 0 };
+  if (!Array.isArray(items) || items.length === 0) {
+    return { inserted: 0, updated: 0, skipped: 0 };
+  }
 
+  // colunas e ordem fixas
   const COLS = [
     "id","title","company","location_raw","remote_flag",
     "description","url","source","published_at","facets_nb"
@@ -25,9 +29,8 @@ export async function upsertJobs(pool, items = []) {
   const N = COLS.length;
 
   const values = [];
-  const rowsSql = items.map((j, i) => {
+  const rows = items.map((j, i) => {
     const b = i * N;
-    // OBS: o último parâmetro ($...::jsonb) faz cast para JSONB
     return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10}::jsonb)`;
   }).join(",");
 
@@ -42,13 +45,14 @@ export async function upsertJobs(pool, items = []) {
       j.url || null,
       j.source || null,
       j.published_at || new Date().toISOString(),
-      JSON.stringify(j.facets_nb || {})   // << importante: stringify
+      JSON.stringify(j.facets_nb || {})
     );
   }
 
-  const text = `
+  // Truque: (xmax = 0) é true em linhas recém-inseridas; false quando foi UPDATE
+  const sql = `
     INSERT INTO jobs (${COLS.join(",")})
-    VALUES ${rowsSql}
+    VALUES ${rows}
     ON CONFLICT (id) DO UPDATE SET
       title         = EXCLUDED.title,
       company       = EXCLUDED.company,
@@ -59,9 +63,12 @@ export async function upsertJobs(pool, items = []) {
       source        = EXCLUDED.source,
       published_at  = EXCLUDED.published_at,
       facets_nb     = COALESCE(EXCLUDED.facets_nb, jobs.facets_nb)
+    RETURNING (xmax = 0) AS inserted
   `;
 
-  await pool.query(text, values);
-  // se você já calcula inserted/updated/skipped, mantenha sua lógica
-  return { inserted: 0, updated: items.length, skipped: 0 };
+  const r = await pool.query(sql, values);
+  const inserted = r.rows.filter(x => x.inserted === true).length;
+  const updated  = r.rowCount - inserted;
+  return { inserted, updated, skipped: 0 };
 }
+
