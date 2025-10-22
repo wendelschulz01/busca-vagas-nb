@@ -48,27 +48,48 @@ app.get("/health", async (req, res) => {
 
 });
 
-app.post("/ingest/:source", async (req, res) =>{
-    const source = req.params.source;
-    const { company, limit } = req.query;
-    const timeoutMs = Number(process.env.ADAPTER_TIMEOUT_MS || 8000);
+app.post("/ingest/:source", async (req, res) => {
+  const { source } = req.params;
+  let { company, limit } = req.query;
+  const timeoutMs = Number(process.env.ADAPTER_TIMEOUT_MS || 8000);
 
-    console.time(`ingest:${source}:${company || "na"}`);
-    try{ 
-        const items = await fetchJobsFromSource({ 
-            source, company, timeoutMs, limit: limit ? Number(limit) : undefined 
-        });
+  const needsCompany = ["lever", "greenhouse", "recruitee", "ashby", "workable"].includes(source);
+  if (needsCompany && !company) {
+    return res.status(400).json({ error: "Parâmetro 'company' é obrigatório para esta fonte" });
+  }
 
-        const unique = Array.from(new Map(items.map(j => [j.id, j])).values());
+  const lim = Math.max(1, Math.min(500, Number(limit || 200) || 200));
 
-        const result = await upsertJobs(unique);
+  console.time(`ingest:${source}:${company || "na"}`);
+  try {   
+    const items = await fetchJobsFromSource({
+      source,
+      company,
+      timeoutMs,
+      limit: lim,
+    });
 
-        console.timeEnd(`ingest:${source}:${company || "na"}`);
-        res.json({ source, company, count_in: items.length, ...result });
-    }catch (e){
-        console.timeEnd(`ingest:${source}:${company || "na"}`);
-        res.status(400).json({ error: e.message });
+    if (!Array.isArray(items)) {
+      throw new Error(`Adapter '${source}' retornou tipo inválido (esperado array)`);
     }
+
+    const unique = Array.from(new Map(items.map(j => [j.id, j])).values());
+    console.log(`[ingest] ${source}/${company || "na"} in=${items.length} unique=${unique.length}`);
+    
+    const result = await upsertJobs(unique);
+
+    console.timeEnd(`ingest:${source}:${company || "na"}`);
+    return res.json({ source, company, count_in: items.length, count_unique: unique.length, ...result });
+
+  } catch (err) {
+    console.timeEnd(`ingest:${source}:${company || "na"}`);
+    console.error(`[ingest:error] ${source}/${company || "na"} ->`, err);
+   
+    const msg = (err && err.message) ? err.message : String(err);
+    const isClientErr =
+      /Parâmetro 'company'|Fonte não suportada|Adapter inválido|slug inválido|HTTP 404|400 Bad Request/i.test(msg);
+    return res.status(isClientErr ? 400 : 500).json({ error: msg });
+  }
 });
 
 app.post("/search", async (req, res) => {
