@@ -10,7 +10,7 @@ export default async function fetchLever({ company, limit = 200, timeoutMs = 800
 
   const res = await fetch(url, {
     signal: ctrl.signal,
-    headers: { "accept": "application/json", "user-agent": "BuscaVagas-NB/1.0" }
+    headers: { accept: "application/json", "user-agent": "BuscaVagas-NB/1.0" }
   });
   clearTimeout(to);
 
@@ -25,15 +25,10 @@ export default async function fetchLever({ company, limit = 200, timeoutMs = 800
   const jobs = raw.slice(0, limit);
 
   return jobs.map((j, idx) => {
-    // Lever costuma ter:
-    //  - j.text (título), j.description (HTML), j.descriptionPlain (texto),
-    //  - j.categories.location / department / team / commitment
-    //  - j.createdAt / updatedAt (epoch ms),
-    //  - j.hostedUrl
     const title = j.text || j.title || "";
     const loc =
       j.categories?.location ||
-      j.workplaceType || // alguns tenants novos
+      j.workplaceType ||
       j.additional?.location ||
       "";
     const html = j.description || "";
@@ -47,9 +42,9 @@ export default async function fetchLever({ company, limit = 200, timeoutMs = 800
       location_raw: loc || null,
       remote_flag: remote,
       description: desc,
-      url: j.hostedUrl || j.applyUrl || j.urls?.show || j.hostedUrl || null,
+      url: j.hostedUrl || j.applyUrl || j.urls?.show || null,
       source: "lever",
-      published_at: j.updatedAt || j.createdAt || null, // epoch ms aceito por Date(...)
+      published_at: j.updatedAt || j.createdAt || null,
       facets_nb: {
         department: j.categories?.department || null,
         team: j.categories?.team || null,
