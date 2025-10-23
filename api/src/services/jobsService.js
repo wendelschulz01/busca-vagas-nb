@@ -9,18 +9,14 @@ const pool = new Pool ({
     database: process.env.POSTGRES_DB || 'jobsdb'
 });
 
-function validateJob(j) {
-    if (!j.id || !j.title || !j.url) {
-        return false;
-    } else{return true};
-}
-
-export async function upsertJobs(pool, items = []) {
+export async function upsertJobs(items = []) {
   if (!Array.isArray(items) || items.length === 0) {
     return { inserted: 0, updated: 0, skipped: 0 };
   }
 
-  // colunas e ordem fixas
+  const valid = items.filter(j => j && j.id && j.title && j.url);
+  if (valid.length === 0) return { inserted: 0, updated: 0, skipped: items.length };
+
   const COLS = [
     "id","title","company","location_raw","remote_flag",
     "description","url","source","published_at","facets_nb"
@@ -28,12 +24,12 @@ export async function upsertJobs(pool, items = []) {
   const N = COLS.length;
 
   const values = [];
-  const rows = items.map((j, i) => {
+  const rows = valid.map((j, i) => {
     const b = i * N;
     return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10}::jsonb)`;
   }).join(",");
 
-  for (const j of items) {
+  for (const j of valid) {
     values.push(
       j.id,
       j.title || "",
@@ -67,6 +63,7 @@ export async function upsertJobs(pool, items = []) {
   const r = await pool.query(sql, values);
   const inserted = r.rows.filter(x => x.inserted === true).length;
   const updated  = r.rowCount - inserted;
-  return { inserted, updated, skipped: 0 };
-}
+  const skipped  = items.length - valid.length;
+  return { inserted, updated, skipped };
+};
 
