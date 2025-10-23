@@ -6,9 +6,10 @@ import pkg from "pg";
 
 import { fetchJobsFromSource } from "./adapters/index.js";
 import { upsertJobs } from "./services/jobsService.js";
+import { scheduleDailyIngest } from "./cron/injestDaily.js";
+import { runDailyIngestAll } from "./cron/injestDaily.js";  
 
 dotenv.config();
-
 const app = express();
 app.use(express.json());
 app.use(cors({origin: process.env.CORS_ORIGIN?.split(",") || "*" }));
@@ -46,6 +47,14 @@ app.get("/health", async (req, res) => {
    const code = status.ok ? 200 : 503;
    res.status(code).json(status);
 
+});
+app.post("/ingest/run-all", async (req, res) => {
+  try {
+    await runDailyIngestAll();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
 });
 
 app.post("/ingest/:source", async (req, res) => {
@@ -123,6 +132,8 @@ app.post("/search", async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+
+scheduleDailyIngest();
 
 const PORT = Number(process.env.API_PORT || 4000);
 app.listen(PORT, () => console.log(`API on http://0.0.0.0:${PORT}`));
