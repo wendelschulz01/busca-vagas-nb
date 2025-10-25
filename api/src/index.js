@@ -3,25 +3,16 @@ import cors from "cors";
 import dotenv from "dotenv";
 import fetch from "node-fetch";
 import pkg from "pg";
+import pool from "./db/pool.js";
 
 import { fetchJobsFromSource } from "./adapters/index.js";
 import { upsertJobs } from "./services/jobsService.js";
-import { scheduleDailyIngest } from "./cron/injestDaily.js";
-import { runDailyIngestAll } from "./cron/injestDaily.js";  
+import { scheduleDailyIngest, runDailyIngestAll } from "./cron/ingestDaily.js";
 
 dotenv.config();
 const app = express();
 app.use(express.json());
 app.use(cors({origin: process.env.CORS_ORIGIN?.split(",") || "*" }));
-
-const { Pool } = pkg;
-const pool = new Pool({
-    host: process.env.POSTGRES_HOST || "db",
-    port: Number(process.env.POSTGRES_PORT || 5434),
-    user: process.env.POSTGRES_USER || "jobs",
-    password: process.env.POSTGRES_PASSWORD || "jobs123",
-    database: process.env.POSTGRES_DB || "jobsdb"
-});
 
 const ML_BASE = process.env.ML_BASE_URL || `http://ml:${process.env.ML_PORT || 8000}`;
 

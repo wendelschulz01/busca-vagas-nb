@@ -8,15 +8,15 @@ const DAILY_SOURCES = [
 { source: "greenhouse", company: "vercel", limit: 200 },
 { source: "lever", company: "welocalize", limit: 200 },
 { source: "lever", company: "lyrahealth", limit: 200 },
-{ source: "recruitee", company: natilik, limit: 200 },
-{ source: "recruitee", company: "careerconnect", limit: 200 },
+{ source: "recruitee", company: "natilik", limit: 200 },
+{ source: "recruitee", company: "hostaway", limit: 200 },
 { source: "ashby", company: "openai", limit: 200 },
 { source: "workable", company: "futureplc", limit: 200 },
 ];
 
 async function saveRun(row) {
     const sql = `
-        INSERT INTO insgest_runs
+        INSERT INTO ingest_runs
             (started_at, finished_at, source, company, limit_req,
              count_in, inserted, updated, skipped, ok, error_message, duration_ms)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)     
@@ -30,7 +30,7 @@ async function saveRun(row) {
     try{
         await pool.query(sql, vals);
     }catch (e) {
-        console.error("[ingest:metrics] erro ao salvar ingest_runs:", e.message);
+        console.error("[ingest:metrics] erro ao salvar em ingest_runs:", e.message);
     };
 };
 
@@ -45,8 +45,8 @@ async function runOne({ source, company, limit=200, timeoutMs = 8000 }) {
         const items = await fetchJobsFromSource({ source, company, limit, timeoutMs });
         const unique = Array.from(new Map(items.map(j => [j.id, j])).values());
         const up = await upsertJobs(unique);
-
         console.timeEnd(`ingest:${source}:${company}`);
+
         result = {
             ok: true,
             count_in: items.length,
@@ -80,7 +80,8 @@ export async function runDailyIngestAll() {
 };
 
 export function scheduleDailyIngest() {
-    if (process.env.ENABLE_CRON?.toLocaleLowerCase() !== "true") {
+    const enabled = (process.env.ENABLE_CRON || "").toLowerCase() === "true";
+    if (!enabled) {
         console.log("[cron] desabilitado (ENABLE_CRON != true)");
         return;
     };

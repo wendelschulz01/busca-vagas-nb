@@ -1,13 +1,5 @@
-import pkg from "pg";
-const { Pool } = pkg;
+import pool from "../db/pool.js";
 
-const pool = new Pool ({
-    host: process.env.POSTGRES_HOST || "db",
-    port: Number(process.env.POSTGRES_PORT || 5432),
-    user: process.env.POSTGRES_USER || "jobs",
-    password: process.env.POSTGRES_PASSWORD || "jobs123",
-    database: process.env.POSTGRES_DB || 'jobsdb'
-});
 
 export async function upsertJobs(items = []) {
   if (!Array.isArray(items) || items.length === 0) {
