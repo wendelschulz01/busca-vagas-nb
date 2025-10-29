@@ -57,10 +57,8 @@ export default function App() {
     setPage(p => p + 1);
   }
 
-  // refetch quando página mudar (sem resetar outros filtros)
-  useEffect(() => {
+   useEffect(() => {
     fetchResults();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   return (
