@@ -15,8 +15,8 @@ router.post("/run-all", async (_req, res) => {
 });
 
 router.post("/:source", async (_req, res) => {
-    const { source } = req.params;
-    let { company, limit } = req.query;
+    const { source } = _req.params;
+    let { company, limit } = _req.query;
     const timeoutMs = Number(process.env.ADAPTER_TIMEOUT_MS || 8000);
 
     const needsCompany = ["lever", "greenhouse", "recruitee", "ashby", "workable"].includes(source);
@@ -24,7 +24,7 @@ router.post("/:source", async (_req, res) => {
         return res.status(400).json({ error: "Parâmetro 'company' é obrigatório para esta fonte" });
     };
 
-    const lim = Math.max(1, Math.mim(500, Number(limit || 200) || 200));
+    const lim = Math.max(1, Math.min(500, Number(limit || 200) || 200));
 
     console.time(`ingest:${source}:${company || "na"}`);
     try{
