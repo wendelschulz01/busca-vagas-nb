@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import "./style.css";
 
 import { runSearch } from "./api.js";
 
@@ -17,6 +16,7 @@ export default function App() {
 
   const [page, setPage] = useState(1);
 
+  // dados vindos da API
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -53,15 +53,14 @@ export default function App() {
 
   function onPrev() {
     if (page > 1) {
-      setPage(p => p - 1);
+      setPage((p) => p - 1);
     }
   }
 
   function onNext() {
-    setPage(p => p + 1);
+    setPage((p) => p + 1);
   }
 
-  // dispara busca quando a página muda (páginação via "Próxima página")
   useEffect(() => {
     fetchResults();
   }, [page]);
@@ -71,7 +70,6 @@ export default function App() {
 
   return (
     <div className="container">
-      {/* Header com pesos dinâmicos */}
       <Header meta={meta} />
 
       <SearchForm
@@ -97,11 +95,7 @@ export default function App() {
           itemsCount={items.length}
         />
 
-        <ResultsSection
-          loading={loading}
-          err={err}
-          items={items}
-        />
+        <ResultsSection loading={loading} err={err} items={items} />
       </section>
     </div>
   );

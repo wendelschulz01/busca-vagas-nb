@@ -1,3 +1,5 @@
+import React from "react";
+
 export default function jobCard({ job }) {
     const when = job.published_at ? new Date(job.published_at) : null;
     const whenStr = when ? when.toLocaleString() : "_";

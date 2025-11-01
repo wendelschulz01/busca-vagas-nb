@@ -1,10 +1,12 @@
+import React from "react";
+
 export default function PaginationBar({
   page,
   onPrev,
   onNext,
   loading,
   meta,
-  itemsCount
+  itemsCount,
 }) {
   return (
     <div className="results-header">
@@ -21,11 +23,7 @@ export default function PaginationBar({
           Página <b>{page}</b>
         </span>
 
-        <button
-          className="btn-outline"
-          onClick={onNext}
-          disabled={loading}
-        >
+        <button className="btn-outline" onClick={onNext} disabled={loading}>
           Próxima página ▶
         </button>
       </div>
@@ -33,10 +31,14 @@ export default function PaginationBar({
       {meta && (
         <div className="meta">
           <span>
-            NB {String(meta.prefersRemote && meta.weights?.W_NB > 0 ? "ativado" : "desativado")}
+            {meta.nbEnabled
+              ? "NB ativado"
+              : "NB desativado"}
           </span>
-          <span>Janela: {meta.days}d</span>
-          <span>Itens: {itemsCount ?? 0}</span>
+          <span>
+            Janela: {meta.days ?? meta.recency_halflife_days ?? "?"}d
+          </span>
+          <span>Itens: {itemsCount}</span>
         </div>
       )}
     </div>
