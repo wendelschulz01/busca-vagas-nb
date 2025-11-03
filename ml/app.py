@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import os, json, time, joblib
 import psycopg2
+import re
 from sklearn.feature_extraction.text import TfidfVectorizer, ENGLISH_STOP_WORDS
 from sklearn.naive_bayes import MultinomialNB, ComplementNB
 from sklearn.pipeline import Pipeline
@@ -15,6 +16,23 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 
 MODEL = None
 MODEL_META = {}
+
+THRESH_REMOTE = float(os.getenv("NB_THRESHOLD", "0.55"))
+
+REMOTE_HINT = re.compile(r'\b(remote|remoto|anywhere|wfh|home[-\s]?office|work from home)\b', re.I)
+ONSITE_HINT = re.compile(r'\b(presencial|on[-\s]?site|onsite|alocado|no\s+escritório|plant[aã]o)\b', re.I)
+
+def apply_hints(text: str, p_remote: float) -> float:
+    txt = text or ""
+    has_remote = bool(REMOTE_HINT.search(txt))
+    has_onsite = bool(ONSITE_HINT.search(txt))
+    # Se houver indicação forte e não houver o oposto
+    if has_remote and not has_onsite:
+        return max(p_remote, 0.85)
+    if has_onsite and not has_remote:
+        return min(p_remote, 0.15)
+    return p_remote
+
 
 PT_STOP = {
     "de","da","do","das","dos","e","a","o","os","as","um","uma","uns","umas",
@@ -187,7 +205,8 @@ def classify(body: ClassifyBody):
     if MODEL is None:
         return {"ok": False, "error": "modelo não carregado"}
     proba = float(MODEL.predict_proba([body.text])[0][1])
-    label = "remoto" if proba >= 0.5 else "presencial"
+    proba = apply_hints(body.text, proba)
+    label = "remoto" if proba >= THRESH_REMOTE else "presencial"
     return {"ok": True, "version": MODEL_META.get("version"), "label": label, "score": proba}
 
 class ClassifyBatchBody(BaseModel):
@@ -199,12 +218,19 @@ def classify_batch(body: ClassifyBody | ClassifyBatchBody):
         return {"ok": False, "error": "modelo não carregado"}
     texts = body.texts if hasattr(body, "texts") else [body.text]
     probs = MODEL.predict_proba(texts)[:,1]
-    items = [{"label": ("remoto" if p>=0.5 else "presencial"), "score": float(p)} for p in probs]
+    items = []
+    for i, p in enumerate(probs):
+        p = float(p)
+        p = apply_hints(texts[i], p) 
+        items.append({
+            "label": ("remoto" if p >= THRESH_REMOTE else "presencial"),
+            "score": p
+    })
     return {"ok": True, "version": MODEL_META.get("version"), "items": items}
 
 class RankBody(BaseModel):
     query: str
-    docs: list[str]  # textos (title + desc), na mesma ordem dos itens consultados
+    docs: list[str]  
 
 @app.post("/rank")
 def rank(body: RankBody):
@@ -235,3 +261,26 @@ def load_latest():
         return {"ok": True, "version": MODEL_META["version"]}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+    
+class IntentBody(BaseModel):
+    q: str
+
+@app.post("/intent")
+def intent(body: IntentBody):
+    q = (body.q or "").strip()
+    tokens = re.findall(r"[a-zA-ZÀ-ÿ0-9]+", q.lower())
+    wants_remote = bool(REMOTE_HINT.search(q))
+    wants_onsite = bool(ONSITE_HINT.search(q))
+
+    prefers_remote = True if wants_remote and not wants_onsite else False
+
+    return {
+        "ok": True,
+        "query": q,
+        "tokens": tokens,
+        "prefersRemote": prefers_remote,
+        "hints": {
+            "has_remote_terms": wants_remote,
+            "has_onsite_terms": wants_onsite
+        }
+    }
