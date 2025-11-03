@@ -12,6 +12,7 @@ const ML_BASE =
   process.env.ML_BASE_URL ||
   `http://ml:${process.env.ML_PORT || 8000}`;
 
+const NB_ENABLED = String(process.env.NB_RERANK_ENABLED || "true").toLowerCase() === "true";
 const W_TEXT = Number(process.env.W_TEXT || 0.7);
 const W_REC  = Number(process.env.W_REC  || 0.3);
 const W_NB   = Number(process.env.W_NB   || 0.0);
@@ -45,7 +46,6 @@ function buildWhereAND(terms, baseFilters, params) {
   if (perTermClauses.length > 0) {
     clauses.push(`(${perTermClauses.join(" AND ")})`);
   }
-
   return clauses;
 }
 
@@ -68,7 +68,6 @@ function buildWhereOR(terms, baseFilters, params) {
   if (perTermClauses.length > 0) {
     clauses.push(`(${perTermClauses.join(" OR ")})`);
   }
-
   return clauses;
 }
 
@@ -120,7 +119,7 @@ async function runQuery({ whereClauses, params, orderBy, pageSize, offset }) {
     console.error("sqlPage:", sqlPage);
     console.error("Postgres error:", err);
     console.error("-------------------------------------");
-    throw err; // deixa a rota /search pegar no try/catch dela
+    throw err; 
   }
 }
 
@@ -181,7 +180,6 @@ router.get("/", async (req, res) => {
           `published_at >= now() - ($${params.length}::text || ' days')::interval`
         );
       }
-
       return { filters, params };
     }
 
@@ -241,55 +239,47 @@ router.get("/", async (req, res) => {
       });
     }
 
-    const localTextScores = rows.map(job => {
+   const textScores = rows.map(job => {
       if (!q) return 0.0;
       const blob = `${job.title || ""} ${(job.description || "").slice(0, 5000)}`;
       const s = textSimilarityScore(q, blob);
       return Number.isFinite(s) ? s : 0.0;
     });
 
+    // NB (remoto) — só calcula se preferiu remoto + pesos habilitados
     let nbScoresRaw = rows.map(() => 0.0);
-    if (prefersRemote && W_NB > 0) {
-      try {
-        const docsForNB = rows.map(job =>
-          `${job.title || ""}\n${(job.description || "").slice(0, 5000)}`
-        );
-
+    try {
+      const docsForNB = rows.map(job =>
+        `${job.title || ""}\n${(job.description || "").slice(0, 5000)}`
+      );
+      if (docsForNB.length > 0) {
         const nbResp = await fetch(`${ML_BASE}/classify-batch`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ texts: docsForNB })
         });
-
         const nbJson = await nbResp.json();
-        if (
-          nbJson.ok &&
-          Array.isArray(nbJson.items) &&
-          nbJson.items.length === rows.length
-        ) {
-          nbScoresRaw = nbJson.items.map(it => {
-            const v = Number(it.score);
-            return Number.isFinite(v) ? v : 0.0;
-          });
+        if (nbJson.ok && Array.isArray(nbJson.items) && nbJson.items.length === rows.length) {
+          nbScoresRaw = nbJson.items.map(it => Number(it.score) || 0.0);
         }
-      } catch (e) {
-        // se o serviço ML cair, segue sem NB
       }
+    } catch {
+      // silencioso: se o ML cair, segue com zeros
     }
 
-    const nbScoresEffective = (prefersRemote && W_NB > 0)
-      ? nbScoresRaw
-      : rows.map(() => 0.0);
+    const nbScores = prefersRemote ? nbScoresRaw : rows.map(() => 0.0);
 
+    // Recência
     const recScores = rows.map(job => {
       const r = recencyScore(job.published_at, RECENCY_HALFLIFE);
       return Number.isFinite(r) ? r : 0.0;
     });
 
+    // Score final
     const ranked = rows.map((job, i) => {
-      const sTxt = localTextScores[i] ?? 0.0;
-      const sRec = recScores[i]      ?? 0.0;
-      const sNb  = nbScoresEffective[i] ?? 0.0;
+      const sTxt = textScores[i] ?? 0.0;
+      const sRec = recScores[i] ?? 0.0;
+      const sNb  = nbScores[i] ?? 0.0;
 
       const finalVal = (W_TEXT * sTxt) + (W_REC * sRec) + (W_NB * sNb);
 
@@ -297,12 +287,13 @@ router.get("/", async (req, res) => {
         ...job,
         text_score:    Number(sTxt.toFixed(6)),
         recency_score: Number(sRec.toFixed(6)),
-        nb_score:      Number(sNb.toFixed(6)),
+        nb_prob:       Number((nbScoresRaw[i] ?? 0).toFixed(6)),
+        nb_score:      Number((nbScores[i]    ?? 0).toFixed(6)),
         final_score:   Number(finalVal.toFixed(6)),
         why: [
           `text:${sTxt.toFixed(2)}*${W_TEXT}`,
           `rec:${sRec.toFixed(2)}*${W_REC}`,
-          ...(prefersRemote && W_NB > 0
+          ...(prefersRemote && NB_ENABLED && W_NB > 0
             ? [`nb:${(nbScoresRaw[i] ?? 0).toFixed(2)}*${W_NB}`]
             : [])
         ]
@@ -311,31 +302,26 @@ router.get("/", async (req, res) => {
 
     ranked.sort((a, b) => b.final_score - a.final_score);
 
-    // tira description do payload final só pra resposta ficar menor
     const items = ranked.map(({ description, ...rest }) => rest);
 
     return res.json({
       ok: true,
       intent,
       meta: {
-        page,
-        pageSize,
-        days,
+        page, pageSize, days,
         prefersRemote,
+        nbEnabled: NB_ENABLED,
         weights: { W_TEXT, W_REC, W_NB },
         recency_halflife_days: RECENCY_HALFLIFE,
-        fallback_used: (terms.length > 0)
+        fallback_used: terms.length > 0
       },
       total,
       items
     });
 
   } catch (err) {
-    console.error("[/search] erro interno final:", err);
-    return res.status(500).json({
-      ok: false,
-      error: err.message || String(err)
-    });
+    console.error("[/search] erro:", err);
+    return res.status(500).json({ ok: false, error: err.message || String(err) });
   }
 });
 
